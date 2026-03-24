@@ -1,4 +1,6 @@
-﻿using BibliotecaAPI.Data;
+﻿using AutoMapper;
+using BibliotecaAPI.Data;
+using BibliotecaAPI.DTOs;
 using BibliotecaAPI.Enitities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -7,24 +9,29 @@ using System.Reflection.Metadata.Ecma335;
 namespace BibliotecaAPI.Controllers
 {
     [ApiController]
-    [Route("api/libro")]
+    [Route("api/libros")]
     public class LibroController : ControllerBase
     {
         private readonly ApplicationDBContext context;
+        private readonly IMapper mapper;
 
-        public LibroController(ApplicationDBContext context)
+        public LibroController(ApplicationDBContext context, IMapper mapper)
         {
             this.context = context;
+            this.mapper = mapper;
         }
 
         [HttpGet]
-        public async Task<IEnumerable<Libro>> Get() 
+        public async Task<IEnumerable<LibroDTO>> Get() 
         {
-            return await context.Libros.ToListAsync();
+            var libros = await context.Libros.ToListAsync();
+            var librosDTO = mapper.Map<IEnumerable<LibroDTO>>(libros);
+
+            return librosDTO;
         }
 
-        [HttpGet("{id:int}")]
-        public async Task<ActionResult<Libro>> Get(int id)
+        [HttpGet("{id:int}", Name = "ObtenerLibro")]
+        public async Task<ActionResult<LibrosConAutorDTO>> Get(int id)
         {
             var libro = await context.Libros
                 .Include(x => x.Autor)
@@ -33,12 +40,18 @@ namespace BibliotecaAPI.Controllers
             {
                 return NotFound();
             }
-            return libro;
+
+            var libroDTO = mapper.Map<LibrosConAutorDTO>(libro);
+            
+
+            return libroDTO;
         }
 
         [HttpPost]
-        public async Task<ActionResult> Post(Libro libro)
+        public async Task<ActionResult> Post(LibroCreateDTO libroCreateDTO)
         {
+            var libro = mapper.Map<Libro>(libroCreateDTO);
+
             var existeAutor = await context.Autores.AnyAsync(x => x.Id == libro.AutorId);
             if (!existeAutor)
             {
@@ -47,17 +60,18 @@ namespace BibliotecaAPI.Controllers
             }
             context.Add(libro);
             await context.SaveChangesAsync();
-            return Ok();
+
+            var libroDTO = mapper.Map<LibroDTO>(libro);
+            return CreatedAtRoute("ObtenerLibro", new {id = libro.Id}, libroDTO);
         }
 
         [HttpPut("{id:int}")]
-        public async Task<ActionResult> Put(int id, Libro libro)
+        public async Task<ActionResult> Put(int id, LibroCreateDTO libroCreateDTO)
         {
-            if (id != libro.Id)
-            {
-                return BadRequest("Los ids no coinciden");
-            }
+            var libro = mapper.Map<Libro>(libroCreateDTO);
 
+            libro.Id = id; 
+           
             var existeAutor = await context.Autores.AnyAsync(x => x.Id == libro.AutorId);
 
             if (!existeAutor)
@@ -67,7 +81,7 @@ namespace BibliotecaAPI.Controllers
 
             context.Update(libro);
             await context.SaveChangesAsync();
-            return Ok();
+            return NoContent();
         }
 
         [HttpDelete("{id:int}")]
@@ -78,7 +92,7 @@ namespace BibliotecaAPI.Controllers
             {
                 return NotFound();
             }
-            return Ok();
+            return NoContent();
         }
     }
 }
